@@ -21,3 +21,10 @@ class WorkForm(forms.ModelForm):
     class Meta:
         model = Work
         fields = ['link', 'work_type']
+
+
+from django import forms
+
+class TokenObtainForm(forms.Form):
+    username = forms.CharField(max_length=150, label='Username')
+    password = forms.CharField(widget=forms.PasswordInput(), label='Password')

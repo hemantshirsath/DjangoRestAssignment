@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Obtain Token</title>
+</head>
+
+<body>
+    <h2>Obtain Token</h2>
+    <form method="post" action="{% url 'obtain_token' %}">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">Obtain Token</button>
+    </form>
+</body>
+
+</html>

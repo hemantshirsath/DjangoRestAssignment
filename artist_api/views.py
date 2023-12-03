@@ -1,92 +1,9 @@
-# from django.shortcuts import render
-# from django.urls import reverse_lazy
-# from rest_framework import generics, viewsets, permissions, filters
-# from rest_framework.response import Response
-# from rest_framework import status
-# from .models import Artist, Work
-# from .serializers import ArtistSerializer, WorkSerializer, WorkTypeSerializer, ArtistDetailSerializer
-# from .forms import ArtistRegistrationForm, WorkForm
-# from rest_framework.authtoken.models import Token
-# from django.dispatch import receiver
-# from django.db.models.signals import post_save
-# from django.contrib.auth.models import User
-# from django.contrib.auth.forms import UserCreationForm
+from django.shortcuts import render
+from django.contrib import messages
 
-# class WorkListCreateView(generics.ListCreateAPIView):
-#     queryset = Work.objects.all()
-#     serializer_class = WorkSerializer
-#     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-
-#     def get_queryset(self):
-#         queryset = Work.objects.all()
-
-#         # Filtering by work type
-#         work_type = self.request.query_params.get('work_type', None)
-#         if work_type:
-#             queryset = queryset.filter(work_type=work_type)
-
-#         # Searching by artist name
-#         artist_name = self.request.query_params.get('artist', None)
-#         if artist_name:
-#             queryset = queryset.filter(artists__name__icontains=artist_name)
-
-#         return queryset
-
-#     def perform_create(self, serializer):
-#         serializer.save(artist=self.request.user.artist)
-
-#     def list(self, request, *args, **kwargs):
-#         works = self.get_queryset()
-#         serializer = WorkSerializer(works, many=True)
-#         return Response(serializer.data)
-
-
-# class ArtistListCreateView(generics.ListCreateAPIView):
-#     queryset = Artist.objects.all()
-#     serializer_class = ArtistSerializer
-
-#     def create(self, request, *args, **kwargs):
-#         form = ArtistRegistrationForm(request.data)
-#         if form.is_valid():
-#             user = form.save()
-
-#             # Create an associated Artist object
-#             artist = Artist.objects.create(user=user, name=form.cleaned_data['name'])
-
-#             serializer = ArtistSerializer(artist)
-#             headers = self.get_success_headers(serializer.data)
-#             return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
-#         else:
-#             return Response(form.errors, status=status.HTTP_400_BAD_REQUEST)
-
-#     def get_success_url(self):
-#         return reverse_lazy('work-list-create')
-    
-#  # Make sure to replace this with the actual path to your serializer
-
-# class RegisterView(generics.CreateAPIView):
-#     serializer_class = UserCreationForm
-#     permission_classes = [permissions.AllowAny]
-
-#     def perform_create(self, serializer):
-#         # Call save on the serializer, which will create the user
-#         user = serializer.save()
-
-#         # Create a token for the newly registered user
-#         Token.objects.create(user=user)
-
-
-
-# # class RegisterView(generics.CreateAPIView):
-# #     serializer_class = UserCreationForm
-# #     permission_classes = [permissions.AllowAny]
-
-# #     def create(self, request, *args, **kwargs):
-# #         response = super().create(request, *args, **kwargs)
-# #         user = User.objects.get(username=request.data['username'])
-# #         Token.objects.create(user=user)  # Create a token for the newly registered user
-# #         return response
+import requests
 from rest_framework.authtoken.models import Token
+from rest_framework.views import APIView
 from django.contrib.auth.models import User
 from django.dispatch import receiver
 from django.db.models.signals import post_save
@@ -97,6 +14,7 @@ from .serializers import ArtistSerializer, WorkSerializer, UserRegistrationSeria
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.response import Response
 from rest_framework import generics, permissions, filters, status
+from .forms import TokenObtainForm
 
 class ObtainAuthTokenView(ObtainAuthToken):
     """Custom ObtainAuthToken view to return user details along with the token."""
@@ -116,6 +34,38 @@ class ObtainAuthTokenView(ObtainAuthToken):
             return Response({'user_id': user.pk, 'username': user.username})
         else:
             return Response({'detail': 'Not authenticated'}, status=401)
+
+class OpenObtainAuthTokenView(ObtainAuthToken):
+    """Custom ObtainAuthToken view to return user details along with the token."""
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.serializer_class(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        user = serializer.validated_data['user']
+        token, created = Token.objects.get_or_create(user=user)
+        return Response({'token': token.key, 'user_id': user.pk, 'username': user.username})
+
+
+class OpenTokenInfoView(APIView):
+    """View to get token information for an open endpoint."""
+
+    def post(self, request, *args, **kwargs):
+        username = request.data.get('username', None)
+        password = request.data.get('password', None)
+
+        if not username or not password:
+            return Response({'detail': 'Both username and password are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            return Response({'detail': 'Invalid credentials.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not user.check_password(password):
+            return Response({'detail': 'Invalid credentials.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        token, created = Token.objects.get_or_create(user=user)
+        return Response({'token': token.key, 'user_id': user.pk, 'username': user.username})
 
 class WorkListCreateView(generics.ListCreateAPIView):
     queryset = Work.objects.all()
@@ -157,3 +107,27 @@ def create_artist_profile(sender, instance, created, **kwargs):
         Artist.objects.create(user=instance)
 
 
+
+def obtain_token(request):
+    if request.method == 'POST':
+        form = TokenObtainForm(request.POST)
+        if form.is_valid():
+            username = form.cleaned_data['username']
+            password = form.cleaned_data['password']
+
+            # Make a POST request to the /api/token/ endpoint
+            response = requests.post(
+                'http://127.0.0.1:8000/api/token/',
+                data={'username': username, 'password': password}
+            )
+
+            if response.status_code == 200:
+                token_data = response.json()
+                messages.success(request, f'Token obtained successfully for user {username}')
+                return render(request, 'token_obtain_success.html', {'token_data': token_data})
+            else:
+                messages.error(request, 'Invalid credentials. Please try again.')
+    else:
+        form = TokenObtainForm()
+
+    return render(request, 'token_obtain.html', {'form': form})
