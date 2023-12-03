@@ -1,0 +1,12 @@
+<!-- artist_api/templates/artist_list.html -->
+
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>Artists</h2>
+<ul>
+    {% for artist in artists %}
+    <li>{{ artist.name }}</li>
+    {% endfor %}
+</ul>
+{% endblock %}

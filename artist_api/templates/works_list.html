@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Works List</title>
+</head>
+
+<body>
+    <h1>Works List</h1>
+
+    {% if works %}
+    <ul>
+        {% for work in works %}
+        <li>
+            <strong>Link:</strong> <a href="{{ work.link }}" target="_blank">{{ work.link }}</a><br>
+            <strong>Work Type:</strong> {{ work.get_work_type_display }}
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>No works available.</p>
+    {% endif %}
+</body>
+
+</html>
